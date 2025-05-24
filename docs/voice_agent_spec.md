@@ -1,194 +1,177 @@
-# Voice Appointment Scheduling Agent
+# Voice Appointment Scheduling Agent - MVP Spec
+
+_Focused on "Returning Caller Magic"_
 
 ## 1. Product Overview
 
-A cloud-hosted voice agent reachable via a public phone number that triages new or returning patients, captures all information required to schedule an appointment, and emails the caller a confirmation summary. The agent replaces front-desk intake calls and operates 24/7.
+A phone-based AI agent that provides a **superior patient intake experience** by remembering every previous interaction. The agent collects appointment scheduling information with perfect recall for returning patients, creating a personalized experience that builds trust and reduces friction.
 
-## 2. Goals & Success Criteria
+## 2. Core Hypothesis
 
-- **Completion Rate ≥ 90 %** of calls reach "fully captured" state.
-- **Average Call Duration ≤ 4 min** for successful captures.
-- **STT Accuracy ≥ 95 %** on required fields.
-- System uptime **≥ 99.9 %** (24 × 7).
-- HIPAA-aligned data handling.
+**"Perfect conversational memory creates a fundamentally better patient experience than starting fresh every call"**
 
-## 3. User Personas
+Traditional receptionists forget previous calls. Current AI systems have no memory. Our agent remembers everything, making returning patients feel valued and known.
 
-| Persona          | Goal                               | Technical Constraints                              |
-| ---------------- | ---------------------------------- | -------------------------------------------------- |
-| Patient Caller   | Book appointment quickly by phone. | Varies in accent, background noise, phone quality. |
-| Operations Staff | Receive structured intake data.    | Needs CSV / EHR import and email notifications.    |
-| Engineer (You)   | Maintain & extend system.          | Python-centric stack, CI/CD, logging.              |
+## 3. Success Criteria (MVP)
 
-## 4. High-Level Call Flow
+- **First-time callers:** Complete data collection in ≤ 5 minutes
+- **Returning callers:** Complete data collection in ≤ 2 minutes (due to memory pre-fill)
+- **Completion rate ≥ 85%** for all required fields
+- **Wow factor:** Returning callers express surprise/delight at being remembered
 
-1. **Inbound Call** via Twilio Voice → webhook (Flask)
-2. **Voice Agent Session** created in LiveKit Voice Agent (or Pipecat)
-3. **Greeting & Consent**
-4. **Field Collection Loop**: iterates over required slots
-   1. Name & DOB
-   2. Insurance payer name & ID
-   3. Referral physician
-   4. Chief complaint
-   5. Address → validate via external API; re-prompt on invalid
-   6. Contact phone & email
-5. **Offer Appointments** (mock provider/time list)
-6. **Confirm & Summarize**
-7. **Good-bye**; hang-up
-8. **Post-Call Actions**: email confirmation, persist data, metrics.
+## 4. Required Data Collection
 
-## 5. Functional Requirements
+### First-Time Caller Flow:
 
-1. Expose **public DID phone number**.
-2. **Collect & validate** all seven data elements before call closure.
-3. **Dynamic slot-filling**: agent should skip already provided slots.
-4. **Address validation** using USPS or Zip-code API; reprompt on error.
-5. **Fallback / Escalation**: after 3 failed attempts → transfer to live agent or voicemail.
-6. **Email Confirmation** (SendGrid) to caller + ops alias.
-7. **Call Recording & Logs** stored for QA (encrypted at rest).
-8. **Analytics Dashboard** (Grafana) for KPIs.
+1. **Patient name and date of birth**
+2. **Insurance information** (payer name and member ID)
+3. **Referral status** and referring physician (if applicable)
+4. **Chief medical complaint** (reason for visit)
+5. **Complete address** with real-time validation via external API
+6. **Contact information** (phone number and email)
+7. **Appointment selection** from available providers and times
 
-## 6. Non-Functional Requirements
+### Returning Caller Magic Flow:
 
-- Latency < 700 ms round-trip (speech ↔ speech).
-- Scalable to 50 concurrent calls.
-- Resilient to STT errors (confidence threshold & reprompts).
-- HIPAA alignment (ePHI encryption, audit logs, BAAs with vendors).
+1. **Quick identification** (name + DOB)
+2. **Memory recall:** "Hi Sarah! I have all your info from last month..."
+3. **Smart confirmation:** "Insurance still Aetna PPO? Address still on Elm Street?"
+4. **Update only what changed**
+5. **Focus on new complaint** and appointment needs
 
-## 7. External Services & SDKs
+## 5. Simplified Technical Architecture
 
-| Concern             | Provider                           | Python SDK                      | Notes                         |
-| ------------------- | ---------------------------------- | ------------------------------- | ----------------------------- |
-| Telephony           | Twilio Voice                       | twilio                          | Webhook & media streams       |
-| STT                 | Deepgram **or** AssemblyAI         | deepgram-sdk / assemblyai       | Real-time WS mode             |
-| TTS                 | ElevenLabs **or** Cartesia         | elevenlabs                      | Instant voice or custom voice |
-| Agent Orchestration | LiveKit Voice Agent **or** Pipecat | livekit-agents-client / pipecat | Dialogue pipeline             |
-| Address Validation  | USPS, Smarty, or Google Geocoding  | requests                        | Needs API key                 |
-| Email               | SendGrid                           | sendgrid                        | Secure email + templates      |
-| Storage             | PostgreSQL + SQLAlchemy            | psycopg2-binary                 | PII encrypted columns         |
-| Hosting             | AWS ECS / Fargate                  | ‑                               | IaC via Terraform             |
-
-## 8. Technical Architecture
-
-```mermaid
-sequenceDiagram
-    Caller->>Twilio: Inbound PSTN call
-    Twilio->>Flask Webhook: /voice
-    Flask->>LiveKit Agent: createSession(mediaStreams)
-    LiveKit Agent->>STT (Deepgram): audio → text
-    LiveKit Agent->>LLM (OpenAI/GPT-4o): intent & slot mgmt
-    LLM->>LiveKit Agent: next prompt text
-    LiveKit Agent->>TTS (ElevenLabs): text → speech
-    LiveKit Agent->>Twilio: synthesized audio
-    loop until all slots
-    end
-    LiveKit Agent->>Address API: validate
-    LiveKit Agent->>SendGrid: send email
-    LiveKit Agent->>PostgreSQL: persist JSON
+```
+Phone Call → Twilio → Simple Flask App → AI Agent
+                         ↓
+Patient Database ← Conversation Memory ← Address Validation API
+                         ↓
+Email Notifications → Team Distribution List
 ```
 
-### Component Breakdown
+### Core Components:
 
-1. **Twilio Voice Webhook** (Flask): bridges PSTN with media streams to LiveKit.
-2. **LiveKit/Pipecat Pipeline**: real-time bidirectional audio, STT, LLM prompt orchestration, TTS.
-3. **Dialogue Manager**: slot list & state machine (Python class).
-4. **Validation Layer**: address, phone, DOB formats.
-5. **Persistence Layer**: SQLAlchemy models → PostgreSQL.
-6. **Notification Service**: SendGrid email worker (Celery).
-7. **Monitoring**: Prometheus metrics exporter, Grafana dashboards, Sentry for errors.
+1. **Twilio Voice** - Phone number and call handling
+2. **Modern AI Voice Platform** (Retell/Vapi/Bland) - Handles STT/TTS/conversation
+3. **Simple Database** - Patient records and call history
+4. **Address Validation** - USPS or Google API for real-time validation
+5. **Email Service** - SendGrid for appointment confirmations
+6. **Flask Webhook** - Processes completed calls and sends notifications
 
-## 9. Data Model (simplified)
+## 6. Conversation Experience Design
 
-```sql
-PatientIntake (
-  id UUID PK,
-  call_sid TEXT UNIQUE,
-  full_name TEXT,
-  dob DATE,
-  insurance_payer TEXT,
-  insurance_id TEXT,
-  referral_physician TEXT,
-  chief_complaint TEXT,
-  address_line1 TEXT,
-  address_line2 TEXT,
-  city TEXT,
-  state CHAR(2),
-  zip TEXT,
-  phone TEXT,
-  email TEXT NULL,
-  provider_offered TEXT,
-  appt_datetime TIMESTAMP,
-  created_at TIMESTAMP DEFAULT now()
-)
+### First-Time Caller:
+
+```
+AI: "Hi! I'm here to help schedule your appointment. What's your name and date of birth?"
+Patient: "Sarah Johnson, March 15th, 1985"
+AI: "Thanks Sarah! Since this is your first time calling, I'll need to collect some information..."
+[Standard data collection flow]
+AI: "Perfect! I have everything I need. I'll remember all this for next time you call."
 ```
 
-## 10. Detailed Call Handling Logic
+### Returning Caller Magic:
 
-1. **On call start** create record with `call_sid`.
-2. **For each slot**:
-   - Check cache → if empty, prompt.
-   - After STT result, run regex/validation.
-   - If low confidence or invalid, reprompt.
-   - Write to DB.
-3. **Offer Appointments**: choose first available mock slot list (config JSON).
-4. **Confirmation**: repeat all collected data, ask for "Yes".
-5. **On Success** → send email & close session.
-6. **On Escalation** → handoff to live ops number using Twilio `Dial`.
+```
+AI: "Hi! What's your name and date of birth?"
+Patient: "Sarah Johnson, March 15th, 1985"
+AI: "Sarah! Great to hear from you again. I have your Aetna PPO insurance, your address on Elm Street, and Dr. Martinez was your referring cardiologist from last time. Is this a follow-up for your chest pain, or something new?"
+Patient: [Wow moment - feels remembered and valued]
+```
 
-## 11. Security & Compliance
+## 7. Address Validation Flow
 
-- All env creds in AWS Secrets Manager.
-- TLS 1.2+ for all vendor APIs.
-- At-rest encryption (AES-256) on DB columns with PII/ePHI.
-- Signed BAAs with Twilio, Deepgram/AssemblyAI, ElevenLabs, AWS.
-- Call recordings encrypted & purged after 30 days.
+```
+Patient: "123 Main Street"
+AI: "I need the complete address. What city and state?"
+Patient: "Springfield"
+AI: "Which Springfield? I see several states have a Springfield."
+Patient: "Ohio"
+AI: [Validates via API] "I found 123 Main Street, Springfield, Ohio 45503. Is that correct?"
+```
 
-## 12. Deployment Plan
+## 8. Mock Data for Demo
 
-1. **Infrastructure**: Terraform module standing up VPC, Fargate service, RDS Postgres, ALB.
-2. **CI/CD**: GitHub Actions → pytest → Docker build → ECR → ECS deploy.
-3. **Observability**: CloudWatch logs, Prometheus sidecar, Sentry.
+### Fake Doctors:
 
-## 13. Environment Configuration
+- Dr. Sarah Chen - Family Medicine (Available: Tomorrow 2 PM, Thursday 10 AM)
+- Dr. Michael Rodriguez - Internal Medicine (Available: Tomorrow 4 PM, Friday 9 AM)
+- Dr. Emily Thompson - Cardiology (Available: Thursday 3 PM, Friday 2 PM)
 
-| Variable                 | Example               |
-| ------------------------ | --------------------- |
-| TWILIO_ACCOUNT_SID       | AC•••                 |
-| TWILIO_AUTH_TOKEN        | •••                   |
-| TWILIO_PHONE_NUMBER      | +1•••                 |
-| LIVEKIT_URL              | wss://agent.myorg.com |
-| LIVEKIT_API_KEY / SECRET | •••                   |
-| DEEPGRAM_API_KEY         | dg•••                 |
-| ELEVENLABS_API_KEY       | el-•••                |
-| SENDGRID_API_KEY         | sg-•••                |
-| ADDRESS_API_KEY          | •••                   |
-| DATABASE_URL             | postgresql://•••      |
+### Appointment Slots:
 
-## 14. Testing Strategy
+- Morning: 9:00 AM, 10:30 AM, 11:45 AM
+- Afternoon: 1:30 PM, 2:45 PM, 4:00 PM
+- Available days: Tomorrow, Thursday, Friday
 
-- **Unit Tests**: dialogue manager, validators.
-- **E2E Tests**: Twilio Test Console → mocked audio.
-- **Load Test**: 50 concurrent calls using Twilio Tools.
-- **Acceptance Test**: real call to staging number, verify email.
+## 9. Post-Call Actions
 
-## 15. Roll-out & Milestones
+After successful data collection:
 
-| Phase | Deliverable                 | Target |
-| ----- | --------------------------- | ------ |
-| 0     | Tech spec (this doc)        | Day 0  |
-| 1     | MVP: call → collect → email | Week 1 |
-| 2     | Address validation, retries | Week 2 |
-| 3     | Metrics & dashboards        | Week 3 |
-| 4     | Load test + HIPAA audit     | Week 4 |
-| 5     | Prod launch (10 providers)  | Week 5 |
+1. **Email confirmation** to patient (if email provided)
+2. **Team notification** to: jeff@assorthealth.com, connor@assorthealth.com, cole@assorthealth.com, jciminelli@assorthealth.com, riley@assorthealth.com
+3. **Store complete record** for future "returning caller magic"
 
-## 16. Future Enhancements
+### Email Template:
 
-- SMS fallback & reminders.
-- Calendar integration (Athenahealth, Redox).
-- Voice-ID authentication for returning patients.
-- Multilingual support (Spanish).
+```
+Subject: New Patient Appointment Scheduled - [Patient Name]
+
+Patient: Sarah Johnson (DOB: 03/15/1985)
+Appointment: Tomorrow 2:00 PM with Dr. Sarah Chen
+Insurance: Aetna PPO (ID: 123456789)
+Complaint: Chest pain
+Referral: Dr. Martinez (Cardiology)
+Contact: 555-1234, sarah@email.com
+```
+
+## 10. Demo Success Metrics
+
+### Quantitative:
+
+- Data collection completion rate
+- Call duration comparison (first-time vs returning)
+- Address validation accuracy
+- Email delivery success
+
+### Qualitative:
+
+- User reactions to being "remembered"
+- Conversation flow smoothness
+- Error recovery effectiveness
+
+## 11. MVP Constraints (Simplified)
+
+**What we're NOT building:**
+
+- Complex slot-filling algorithms
+- Advanced NLP intent recognition
+- HIPAA compliance infrastructure
+- Scalability for hundreds of calls
+- Complex appointment scheduling logic
+- Call recording/analytics dashboards
+
+**What we ARE building:**
+
+- Simple, working phone number
+- Reliable data collection
+- Address validation that works
+- Email notifications that send
+- Database that remembers patients
+- Conversation experience that delights
+
+## 12. 3-Day Implementation Plan
+
+**Day 1:** Set up Twilio + AI voice platform + basic data collection
+**Day 2:** Add address validation + email notifications + database storage  
+**Day 3:** Implement returning caller memory + polish conversation flow
+
+## 13. The Unique Value Proposition
+
+_"The first AI receptionist that actually remembers you"_
+
+This isn't just about collecting data - it's about creating a relationship and experience that makes patients prefer calling over any other method of scheduling appointments.
 
 ---
 
-**Document Version**: v0.1 — generated 2025-05-11
+**Focus:** Prove that conversational memory transforms the patient experience from transactional to personal, leading to higher satisfaction and completion rates.
