@@ -1,0 +1,26 @@
+{
+  "name": "save_data",
+  "description": "Save collected patient data when all information is gathered",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Patient's full name"
+      },
+      "date_of_birth": {
+        "type": "string",
+        "description": "Patient's date of birth"
+      },
+      "phone": {
+        "type": "string",
+        "description": "Patient's phone number"
+      },
+      "reason": {
+        "type": "string",
+        "description": "Reason for visit or chief complaint"
+      }
+    },
+    "required": ["name", "date_of_birth", "phone", "reason"]
+  }
+}
