@@ -150,9 +150,9 @@ if __name__ == "__main__":
     print("🚀 Starting Voice Agent MVP...")
     print(f"📁 Data file: {DATA_FILE}")
     print(f"📝 Notifications file: {NOTIFICATIONS_FILE}")
-    print("🌐 Health check: http://localhost:5000/health")
-    print("👥 Patients endpoint: http://localhost:5000/patients")
-    print("📋 Notifications endpoint: http://localhost:5000/notifications")
+    print("🌐 Health check: http://localhost:5001/health")
+    print("👥 Patients endpoint: http://localhost:5001/patients")
+    print("📋 Notifications endpoint: http://localhost:5001/notifications")
     print("-" * 50)
 
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)
